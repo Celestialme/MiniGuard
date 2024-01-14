@@ -1,0 +1,16 @@
+/user/.DS_Store
+/user/node_modules
+/user/build
+/user/.svelte-kit
+/user/package
+/user/.env
+/user/.env.*
+/user/!.env.example
+/user/vite.config.js.timestamp-*
+/user/vite.config.ts.timestamp-*
+/user/target/
+
+
+/driver/.vs
+/driver/.vscode
+/driver/x64
