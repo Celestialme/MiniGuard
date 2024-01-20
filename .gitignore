@@ -8,7 +8,8 @@
 /user/!.env.example
 /user/vite.config.js.timestamp-*
 /user/vite.config.ts.timestamp-*
-/user/target/
+/user/src-tauri/target/
+/user/src-tauri/sq.db
 
 
 /driver/.vs

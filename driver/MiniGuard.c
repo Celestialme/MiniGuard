@@ -56,6 +56,10 @@ NTSTATUS OnConnect(
 
     ClientPort = clientPort;
     KdPrint(("MiniGuard connected\r\n"));
+    for (int j = 0; j < MAX_PARENT_PIDS; j++)
+    {
+        pids[j] = 0;
+    }
     return STATUS_SUCCESS;
 };
 
@@ -65,7 +69,15 @@ VOID OnDisconnect(
     UNREFERENCED_PARAMETER(ConnectionCookie);
     for (int j = 0; j < MAX_PARENT_PIDS; j++)
     {
-        TerminateProcess(pids[j]);
+        if (pids[j] != 0)
+        {
+
+            TerminateProcess(pids[j]);
+        }
+    }
+    for (int j = 0; j < MAX_PARENT_PIDS; j++)
+    {
+        pids[j] = 0;
     }
     FltCloseClientPort(FilterHandle, &ClientPort);
     KdPrint(("MiniGuard disconnected\r\n"));
@@ -95,11 +107,13 @@ NTSTATUS OnCommunication(
     }
     RtlCopyMemory(FltMessage, InputBuffer, sizeof(MESSAGE));
 
-    for (int j = 0; j < MAX_PARENT_PIDS; j++)
-    {
-        pids[j] = 0;
-    }
     pids[0] = FltMessage->pid;
+
+    // for (int j = 0; j < MAX_PARENT_PIDS; j++)
+    // {
+    //     KdPrint(("%d ", pids[j]));
+    // }
+    // KdPrint(("\n"));
     return STATUS_SUCCESS;
 };
 

@@ -1,6 +1,8 @@
-mod sql;
-mod undo;
-mod utils;
+use crate::{
+    sql,
+    utils::{self, parse_ignored_path},
+};
+use rusqlite::Connection;
 use std::{
     ffi::OsString,
     fs::{self, OpenOptions},
@@ -9,11 +11,13 @@ use std::{
     os::{raw::c_void, windows::ffi::OsStrExt},
     path::Path,
     process::{self, Command},
+    sync::{Arc, Mutex},
 };
-use utils::parse_ignored_path;
+use tauri::async_runtime::TokioHandle;
 use windows::{
     core::w,
     Win32::{
+        Foundation::HANDLE,
         Storage::InstallableFileSystems::{
             FilterConnectCommunicationPort, FilterGetMessage, FilterReplyMessage,
             FilterSendMessage, FILTER_MESSAGE_HEADER, FILTER_REPLY_HEADER,
@@ -36,7 +40,7 @@ struct Receive {
 }
 
 #[repr(i32)]
-enum OperationType {
+pub enum OperationType {
     Create = 1,
     Write = 2,
     Rename = 3,
@@ -48,47 +52,55 @@ struct Reply {
     header: FILTER_REPLY_HEADER,
     data: [u16; 40],
 }
-const BACKUP_DIR: &str = "C:\\Users\\WDAGUtilityAccount\\Desktop\\folder2";
 
-fn main() {
-    let drives = utils::get_drives();
+pub fn initialize_driver(connection: &Connection, port: &HANDLE, drives: &Vec<[String; 2]>) {
+    let ignored_paths_vec = sql::get_ignore_paths(&connection);
     let mut ignored_paths: [[u16; 2048]; 10] = [[0; 2048]; 10];
-    ignored_paths[0] = parse_ignored_path("C:\\Users\\WDAGUtilityAccount\\AppData", &drives);
-    ignored_paths[1] =
-        parse_ignored_path("C:\\Users\\WDAGUtilityAccount\\Desktop\\folder", &drives);
+    for i in 0..ignored_paths_vec.len() {
+        let path = parse_ignored_path(&ignored_paths_vec[i].path, &drives);
+        ignored_paths[i] = path;
+    }
+    let mut bytes_returned: u32 = 0;
+    let main_pid = process::id();
+    let input_buffer = Message {
+        pid: main_pid as _,
+        array: ignored_paths,
+    };
+    let p_input_buffer = &input_buffer as *const Message as *mut c_void;
+    unsafe {
+        FilterSendMessage(
+            port.clone(),
+            p_input_buffer,
+            200,
+            None,
+            0,
+            &mut bytes_returned,
+        )
+        .expect("could not send message");
+    }
+}
+
+pub fn start_listening(port: HANDLE, db_changed: Arc<Mutex<bool>>) {
     let connection = rusqlite::Connection::open("./sq.db").unwrap();
     sql::setup_tables(&connection);
-    let main_pid = process::id();
-    let port_name = w!("\\MiniGuard");
 
-    let output_buffer: [u8; 1024] = [0; 1024];
-    let mut bytes_returned: u32 = 0;
-    let port;
+    let drives = utils::get_drives();
+    initialize_driver(&connection, &port, &drives);
     unsafe {
-        port = FilterConnectCommunicationPort(port_name, 0, None, 0, None)
-            .expect("could not connect to port");
-    }
-
-    unsafe {
-        let input_buffer = Message {
-            pid: main_pid as _,
-            array: ignored_paths,
-        };
-        let p_input_buffer = &input_buffer as *const Message as *mut c_void;
-        println!("input buffer: {:?}", mem::size_of_val(&p_input_buffer));
-        FilterSendMessage(port, p_input_buffer, 200, None, 0, &mut bytes_returned)
-            .expect("could not send message");
         std::thread::spawn(move || loop {
             let drives = drives.clone();
             const BUFFER_SIZE: usize = 1024 * 5;
             let mut buffer: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-            FilterGetMessage(
+            match FilterGetMessage(
                 port,
                 buffer.as_mut_ptr() as *mut _,
                 BUFFER_SIZE as u32,
                 None,
-            )
-            .unwrap();
+            ) {
+                Ok(_) => {}
+                Err(_) => continue,
+            };
+            *db_changed.lock().unwrap() = true;
             let data: Receive = std::ptr::read(buffer.as_ptr() as *const _);
             let null_char_position = data
                 .data
@@ -151,48 +163,5 @@ fn main() {
             )
             .unwrap();
         });
-        let connection = rusqlite::Connection::open("./sq.db").unwrap();
-        loop {
-            let mut command = String::new();
-            stdin().read_line(&mut command).unwrap();
-            if command.starts_with("undo") {
-                let index = command.split(" ").collect::<Vec<&str>>();
-                let index = index[1];
-                undo::undo(
-                    &connection,
-                    match index.trim().parse() {
-                        Ok(x) => x,
-                        Err(_) => 0,
-                    },
-                );
-            } else {
-                match Command::new(command.trim()).spawn() {
-                    Ok(_) => {
-                        println!("Program started");
-                    }
-                    Err(_) => {
-                        println!("Porgram not found");
-                    }
-                };
-            }
-        }
     }
-    //TODO chronology
-
-    //delete file called some.txt
-    // std::fs::remove_file("some.txt").unwrap();
-    // std::fs::File::create("some.txt").unwrap();
-    // std::fs::rename("some.txt", "other.txt").unwrap();
-    // std::fs::remove_file("some.txt").unwrap();
-    // let content = std::fs::read("some.txt").unwrap();
-    // println!("{}", String::from_utf8(content).unwrap());
-    // let mut file = std::fs::File::create("some.txt").unwrap();
-
-    // let mut file = OpenOptions::new()
-    //     .write(true)
-    //     .append(true)
-    //     .open("some.txt")
-    //     .unwrap();
-
-    // file.write_all(b"Hello, world!").unwrap();
 }

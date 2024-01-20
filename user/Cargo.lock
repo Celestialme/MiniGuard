@@ -148,6 +148,7 @@ dependencies = [
 name = "rust"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
  "rusqlite",
  "uuid",
  "windows",

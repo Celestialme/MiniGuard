@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import ProgramPicker from '@src/components/ProgramPicker.svelte';
+	import { invoke } from '@tauri-apps/api';
 	let path: string | null = null;
 	$: if (path) {
-		goto('dashboard');
+		invoke('run_exe', { path }).then((status) => {
+			if (status == true) {
+				goto('dashboard');
+			}
+		});
 	}
 </script>
 

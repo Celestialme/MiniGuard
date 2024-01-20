@@ -3,7 +3,7 @@
 	"build": {
 		"beforeBuildCommand": "npm run build",
 
-		"devPath": "http://localhost:5173",
+		"devPath": "../build",
 		"distDir": "../build"
 	},
 	"package": {
@@ -37,7 +37,7 @@
 				"icons/icon.icns",
 				"icons/icon.ico"
 			],
-			"identifier": "com.tauri.dev",
+			"identifier": "com.miniguard.dev",
 			"longDescription": "",
 			"macOS": {
 				"entitlements": null,

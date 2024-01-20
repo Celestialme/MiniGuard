@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use rusqlite::Connection;
 
-use crate::{sql::Log, OperationType, BACKUP_DIR};
+use crate::{listen::OperationType, sql::Log, BACKUP_DIR};
 
 pub fn undo(conn: &Connection, index: i32) {
     let mut stmt = conn
@@ -48,8 +46,9 @@ pub fn undo(conn: &Connection, index: i32) {
                             println!("Date {}", entry.date.as_ref().unwrap());
                             sync(conn, &original_file_name_path, &entry.date.unwrap());
                         }
-                        Err(_) => {
+                        Err(err) => {
                             println!("BACKUP NOT FOUND!!");
+                            println!("{:?}", err);
                         }
                     }
                 }

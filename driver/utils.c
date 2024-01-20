@@ -533,7 +533,6 @@ BOOLEAN isIgnored(PUNICODE_STRING fullPath, PMESSAGE FltMessage)
         }
         if (wcsncmp(fullPath->Buffer, FltMessage->array[i], wcslen(FltMessage->array[i])) == 0)
         {
-            KdPrint(("INSIDE STARTS WITH %ws\r\n", FltMessage->array[i]));
             return TRUE;
         }
     }

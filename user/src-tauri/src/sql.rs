@@ -1,4 +1,6 @@
-use rusqlite::{Connection, MappedRows};
+use std::default;
+
+use rusqlite::Connection;
 
 use crate::utils::make_backup;
 #[derive(Debug, serde::Serialize)]
@@ -12,6 +14,11 @@ pub struct Log {
     pub is_alive: Option<bool>,
     pub count: Option<i32>,
     pub date: Option<String>,
+}
+#[derive(Debug, serde::Serialize)]
+pub struct IgnorePath {
+    pub id: Option<i32>,
+    pub path: String,
 }
 impl Default for Log {
     fn default() -> Self {
@@ -41,6 +48,15 @@ pub fn setup_tables(conn: &Connection) {
     count	INTEGER,
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (current_fileName,isAlive)
+)",
+        (), // empty list of parameters.
+    )
+    .unwrap();
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS IGNORE_PATHS (
+    id    INTEGER PRIMARY KEY,
+    path  TEXT NOT NULL UNIQUE
 )",
         (), // empty list of parameters.
     )
@@ -220,17 +236,20 @@ pub fn operation_delete(conn: &Connection, delete_path: &str) {
 }
 pub fn get_logs(conn: &Connection) -> Vec<Log> {
     let mut stmt = conn
-    .prepare("SELECT original_fileName,current_fileName,original_operation,current_operation, backup_name,date FROM LOGS LIMIT 100 ;")
+    .prepare("SELECT id, original_fileName,current_fileName,original_operation,current_operation, backup_name,isAlive,count,date FROM LOGS LIMIT 100 ;")
     .unwrap();
     let mut logs: Vec<Log> = vec![];
     match stmt.query_map([], |row| {
         Ok(Log {
-            original_file_name: row.get(0).unwrap(),
-            current_file_name: row.get(1).unwrap(),
-            original_operation: row.get(2).unwrap(),
-            current_operation: row.get(3).unwrap(),
-            backup_name: row.get(4).unwrap(),
-            date: row.get(5).unwrap(),
+            id: row.get(0).unwrap(),
+            original_file_name: row.get(1).unwrap(),
+            current_file_name: row.get(2).unwrap(),
+            original_operation: row.get(3).unwrap(),
+            current_operation: row.get(4).unwrap(),
+            backup_name: row.get(5).unwrap(),
+            is_alive: row.get(6).unwrap(),
+            count: row.get(7).unwrap(),
+            date: row.get(8).unwrap(),
             ..Log::default()
         })
     }) {
@@ -242,4 +261,36 @@ pub fn get_logs(conn: &Connection) -> Vec<Log> {
         Err(_) => {}
     };
     logs
+}
+
+pub fn get_ignore_paths(conn: &Connection) -> Vec<IgnorePath> {
+    let mut stmt = conn.prepare("SELECT  id,path from IGNORE_PATHS;").unwrap();
+    let mut paths: Vec<IgnorePath> = vec![];
+    match stmt.query_map([], |row| {
+        Ok(IgnorePath {
+            id: row.get(0).unwrap(),
+            path: row.get(1).unwrap(),
+        })
+    }) {
+        Ok(entry) => {
+            for e in entry {
+                paths.push(e.unwrap());
+            }
+        }
+        Err(_) => {}
+    };
+    paths
+}
+
+pub fn add_ignore_path(conn: &Connection, path: String) {
+    conn.execute(
+        "INSERT OR IGNORE INTO IGNORE_PATHS (path) values (?1)
+        ;",
+        (&path,),
+    )
+    .unwrap();
+}
+pub fn remove_ignore_path(conn: &Connection, path_id: i32) {
+    conn.execute("DELETE FROM IGNORE_PATHS WHERE  id = ?1;", (&path_id,))
+        .unwrap();
 }
